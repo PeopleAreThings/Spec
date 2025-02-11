@@ -1,274 +1,241 @@
-class SpectrogramAnalyzer {
+class SpectrogramGenerator {
     constructor() {
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        this.analyserLeft = this.audioContext.createAnalyser();
-        this.analyserRight = this.audioContext.createAnalyser();
-        this.setupAnalysers();
-        this.setupCanvases();
-        this.setupControls();
-        this.isRecording = false;
-        this.animationFrame = null;
+        this.canvas = document.getElementById('spectrogramCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.audioData = null;
+        this.setupEventListeners();
     }
 
-    setupAnalysers() {
-        this.analyserLeft.fftSize = 2048;
-        this.analyserRight.fftSize = 2048;
-        this.bufferLength = this.analyserLeft.frequencyBinCount;
-        this.dataArrayLeft = new Uint8Array(this.bufferLength);
-        this.dataArrayRight = new Uint8Array(this.bufferLength);
-    }
-
-    setupCanvases() {
-        this.canvasLeft = document.getElementById('spectrogramLeft');
-        this.canvasRight = document.getElementById('spectrogramRight');
-        this.ctxLeft = this.canvasLeft.getContext('2d');
-        this.ctxRight = this.canvasRight.getContext('2d');
+    setupEventListeners() {
+        // File input handling
+        const fileInput = document.getElementById('audioFile');
+        const dropZone = document.getElementById('dropZone');
         
-        this.resizeCanvases();
-        window.addEventListener('resize', () => this.resizeCanvases());
-    }
-
-    resizeCanvases() {
-        const width = this.canvasLeft.parentElement.clientWidth;
-        this.canvasLeft.width = width;
-        this.canvasLeft.height = 300;
-        this.canvasRight.width = width;
-        this.canvasRight.height = 300;
-    }
-
-    setupControls() {
-        document.getElementById('recordButton').addEventListener('click', () => this.startRecording());
-        document.getElementById('stopButton').addEventListener('click', () => this.stopRecording());
-        document.getElementById('audioFileInput').addEventListener('change', (e) => this.handleAudioFile(e));
-        document.getElementById('downloadButton').addEventListener('click', () => this.downloadImage());
-        document.getElementById('clearButton').addEventListener('click', () => this.clearSpectrograms());
+        fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         
-        // Setup sliders
-        this.sensitivity = document.getElementById('sensitivity');
-        this.contrast = document.getElementById('contrast');
-        this.zoom = document.getElementById('zoom');
-        this.minFreq = document.getElementById('minFreq');
-        this.maxFreq = document.getElementById('maxFreq');
-        this.colorScheme = document.getElementById('colorScheme');
-        
-        // Update values display
-        const sliders = [this.sensitivity, this.contrast, this.zoom, this.minFreq, this.maxFreq];
-        sliders.forEach(slider => {
-            slider.addEventListener('input', (e) => {
-                const value = e.target.value;
-                e.target.nextElementSibling.textContent = this.formatValue(slider.id, value);
-                this.updateSpectrogram();
-            });
+        // Drag and drop handling
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
         });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('audio/')) {
+                fileInput.files = e.dataTransfer.files;
+                this.handleFileSelect(e);
+            }
+        });
+
+        // Button handling
+        document.getElementById('generateBtn').addEventListener('click', () => this.generateSpectrogram());
+        document.getElementById('downloadBtn').addEventListener('click', () => this.downloadSpectrogram());
     }
 
-    formatValue(id, value) {
-        switch(id) {
-            case 'sensitivity':
-            case 'contrast':
-                return `${value}.0%`;
-            case 'zoom':
-                return `${value}%`;
-            case 'minFreq':
-                return `${value}.0 Hz`;
-            case 'maxFreq':
-                return `${(value/1000).toFixed(1)} kHz`;
-            default:
-                return value;
-        }
-    }
-
-    async startRecording() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const source = this.audioContext.createMediaStreamSource(stream);
-            const splitter = this.audioContext.createChannelSplitter(2);
-            
-            source.connect(splitter);
-            splitter.connect(this.analyserLeft, 0);
-            splitter.connect(this.analyserRight, 1);
-            
-            this.isRecording = true;
-            document.getElementById('recordButton').disabled = true;
-            document.getElementById('stopButton').disabled = false;
-            
-            this.draw();
-        } catch (err) {
-            console.error('Error accessing microphone:', err);
-            alert('Error accessing microphone. Please ensure you have granted microphone permissions.');
-        }
-    }
-
-    stopRecording() {
-        this.isRecording = false;
-        document.getElementById('recordButton').disabled = false;
-        document.getElementById('stopButton').disabled = true;
-        cancelAnimationFrame(this.animationFrame);
-    }
-
-    async handleAudioFile(event) {
-        const file = event.target.files[0];
+    async handleFileSelect(event) {
+        const file = event.target.files[0] || event.dataTransfer.files[0];
         if (!file) return;
+
+        document.getElementById('generateBtn').disabled = false;
+        this.showProgress();
 
         try {
             const arrayBuffer = await file.arrayBuffer();
-            const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-            
-            const source = this.audioContext.createBufferSource();
-            const splitter = this.audioContext.createChannelSplitter(2);
-            
-            source.buffer = audioBuffer;
-            source.connect(splitter);
-            splitter.connect(this.analyserLeft, 0);
-            splitter.connect(this.analyserRight, 1);
-            
-            source.start(0);
-            this.isRecording = true;
-            this.draw();
-        } catch (err) {
-            console.error('Error loading audio file:', err);
+            this.audioData = await this.audioContext.decodeAudioData(arrayBuffer);
+            this.updateProgress(100);
+            this.hideProgress();
+        } catch (error) {
+            console.error('Error loading audio file:', error);
             alert('Error loading audio file. Please ensure it\'s a valid audio format.');
+            this.hideProgress();
         }
     }
 
-    draw() {
-        if (!this.isRecording) return;
+    async generateSpectrogram() {
+        if (!this.audioData) return;
 
-        this.analyserLeft.getByteFrequencyData(this.dataArrayLeft);
-        this.analyserRight.getByteFrequencyData(this.dataArrayRight);
-
-        // Apply frequency range filtering
-        const minFreq = this.minFreq.value;
-        const maxFreq = this.maxFreq.value;
-        const nyquist = this.audioContext.sampleRate / 2;
-        const minBin = Math.floor((minFreq / nyquist) * this.bufferLength);
-        const maxBin = Math.floor((maxFreq / nyquist) * this.bufferLength);
-
-        // Shift existing data
-        const zoom = this.zoom.value / 100;
-        const shiftAmount = Math.max(1, Math.floor(zoom));
+        this.showProgress();
         
-        this.ctxLeft.drawImage(this.canvasLeft, shiftAmount, 0, this.canvasLeft.width - shiftAmount, this.canvasLeft.height);
-        this.ctxRight.drawImage(this.canvasRight, shiftAmount, 0, this.canvasRight.width - shiftAmount, this.canvasRight.height);
+        // Get settings
+        const fftSize = parseInt(document.getElementById('fftSize').value);
+        const colorScheme = document.getElementById('colorScheme').value;
+        const freqScale = document.getElementById('freqScale').value;
 
-        // Draw new data
-        const sensitivity = this.sensitivity.value / 100;
-        const contrast = this.contrast.value / 100;
+        // Setup analyzer
+        const analyzer = this.audioContext.createAnalyser();
+        analyzer.fftSize = fftSize;
         
-        this.drawColumn(this.ctxLeft, this.dataArrayLeft, sensitivity, contrast, minBin, maxBin);
-        this.drawColumn(this.ctxRight, this.dataArrayRight, sensitivity, contrast, minBin, maxBin);
+        // Setup canvas
+        const width = Math.ceil(this.audioData.length / analyzer.fftSize) * 2;
+        const height = analyzer.frequencyBinCount;
+        this.canvas.width = width;
+        this.canvas.height = height;
 
-        this.animationFrame = requestAnimationFrame(() => this.draw());
-    }
+        // Process audio data
+        const offlineContext = new OfflineAudioContext(
+            1,
+            this.audioData.length,
+            this.audioData.sampleRate
+        );
 
-    drawColumn(ctx, data, sensitivity, contrast, minBin, maxBin) {
-        const width = Math.max(1, Math.floor(this.zoom.value / 100));
-        const height = ctx.canvas.height;
-        const columnData = new Uint8ClampedArray(height * 4 * width);
+        const source = offlineContext.createBufferSource();
+        source.buffer = this.audioData;
+        
+        const analyzerNode = offlineContext.createAnalyser();
+        analyzerNode.fftSize = fftSize;
+        
+        source.connect(analyzerNode);
+        analyzerNode.connect(offlineContext.destination);
+        
+        source.start();
 
-        for (let y = 0; y < height; y++) {
-            const binIndex = Math.floor(minBin + (y / height) * (maxBin - minBin));
-            const value = Math.pow(data[binIndex] / 255 * sensitivity, contrast) * 255;
-            const color = this.getColor(value);
+        // Process audio in chunks
+        const frequencyData = new Uint8Array(analyzerNode.frequencyBinCount);
+        let currentX = 0;
 
-            for (let x = 0; x < width; x++) {
-                const pixelIndex = ((height - y - 1) * width + x) * 4;
-                columnData[pixelIndex] = color[0];
-                columnData[pixelIndex + 1] = color[1];
-                columnData[pixelIndex + 2] = color[2];
-                columnData[pixelIndex + 3] = 255;
+        const processChunk = () => {
+            analyzerNode.getByteFrequencyData(frequencyData);
+            this.drawSpectrogramColumn(currentX, frequencyData, colorScheme, freqScale);
+            currentX += 1;
+            
+            const progress = (currentX / width) * 100;
+            this.updateProgress(progress);
+
+            if (currentX < width) {
+                requestAnimationFrame(processChunk);
+            } else {
+                this.finalizeSpectrogram();
             }
-        }
+        };
 
-        const imageData = new ImageData(columnData, width, height);
-        ctx.putImageData(imageData, ctx.canvas.width - width, 0);
+        await offlineContext.startRendering();
+        processChunk();
     }
 
-    getColor(value) {
-        const scheme = this.colorScheme.value;
-        switch(scheme) {
+    drawSpectrogramColumn(x, frequencyData, colorScheme, freqScale) {
+        const height = this.canvas.height;
+        
+        for (let y = 0; y < height; y++) {
+            const index = freqScale === 'log' 
+                ? Math.floor(Math.exp(Math.log(height) * (y / height))) 
+                : y;
+                
+            const value = frequencyData[index];
+            const color = this.getColor(value, colorScheme);
+            
+            this.ctx.fillStyle = color;
+            this.ctx.fillRect(x, height - y, 1, 1);
+        }
+    }
+
+    getColor(value, scheme) {
+        const normalized = value / 255;
+        
+        switch (scheme) {
             case 'heated':
-                return [
-                    Math.min(255, value * 2),
-                    Math.max(0, value - 128) * 2,
-                    Math.max(0, value - 192) * 4
-                ];
+                return `rgb(
+                    ${Math.min(255, value * 2)},
+                    ${Math.max(0, value - 128) * 2},
+                    ${Math.max(0, value - 192) * 4}
+                )`;
             case 'viridis':
-                return [
-                    value,
-                    Math.min(255, value * 1.5),
-                    Math.max(0, 255 - value)
-                ];
+                return `rgb(
+                    ${value},
+                    ${Math.min(255, value * 1.5)},
+                    ${Math.max(0, 255 - value)}
+                )`;
             case 'magma':
-                return [
-                    Math.min(255, value * 2),
-                    Math.max(0, value - 64),
-                    Math.min(255, value * 1.5)
-                ];
+                return `rgb(
+                    ${Math.min(255, value * 2)},
+                    ${Math.max(0, value - 64)},
+                    ${Math.min(255, value * 1.5)}
+                )`;
             default:
-                return [value, value, value];
+                return `rgb(${value}, ${value}, ${value})`;
         }
     }
 
-    clearSpectrograms() {
-        this.ctxLeft.clearRect(0, 0, this.canvasLeft.width, this.canvasLeft.height);
-        this.ctxRight.clearRect(0, 0, this.canvasRight.width, this.canvasRight.height);
+    finalizeSpectrogram() {
+        this.hideProgress();
+        this.canvas.classList.add('visible');
+        document.getElementById('downloadBtn').disabled = false;
+        
+        // Add frequency labels
+        this.addFrequencyLabels();
     }
 
-    downloadImage() {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+    addFrequencyLabels() {
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
         
-        // Set canvas size to fit both spectrograms and labels
-        canvas.width = this.canvasLeft.width;
-        canvas.height = this.canvasLeft.height * 2 + 60;
+        tempCanvas.width = this.canvas.width + 60;  // Extra space for labels
+        tempCanvas.height = this.canvas.height + 40;  // Extra space for time axis
         
-        // Fill background
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Draw original spectrogram
+        tempCtx.fillStyle = '#fff';
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.drawImage(this.canvas, 60, 0);
         
-        // Draw spectrograms
-        ctx.drawImage(this.canvasLeft, 0, 20);
-        ctx.drawImage(this.canvasRight, 0, this.canvasLeft.height + 40);
+        // Add frequency labels
+        tempCtx.fillStyle = '#000';
+        tempCtx.font = '12px Arial';
         
-        // Add labels
-        ctx.fillStyle = '#aaa';
-        ctx.font = '12px Arial';
-        ctx.fillText('LEFT CHANNEL', 10, 15);
-        ctx.fillText('RIGHT CHANNEL', 10, this.canvasLeft.height + 35);
+        const freqLabels = [0, 1000, 2000, 5000, 10000, 20000];
+        freqLabels.forEach(freq => {
+            const y = this.canvas.height * (1 - freq / 22050);  // Nyquist frequency
+            tempCtx.fillText(`${freq} Hz`, 0, y + 4);
+            tempCtx.beginPath();
+            tempCtx.moveTo(55, y);
+            tempCtx.lineTo(60, y);
+            tempCtx.stroke();
+        });
         
-        // Add frequency scale
-        this.drawFrequencyScale(ctx);
+        // Add time labels
+        const duration = this.audioData.duration;
+        const timeLabels = [0, duration/4, duration/2, duration*3/4, duration];
+        timeLabels.forEach(time => {
+            const x = 60 + (this.canvas.width * (time / duration));
+            tempCtx.fillText(`${time.toFixed(1)}s`, x, this.canvas.height + 20);
+        });
         
-        // Create download link
+        // Update canvas
+        this.canvas.width = tempCanvas.width;
+        this.canvas.height = tempCanvas.height;
+        this.ctx.drawImage(tempCanvas, 0, 0);
+    }
+
+    downloadSpectrogram() {
+        const format = document.getElementById('outputFormat').value;
         const link = document.createElement('a');
-        link.download = 'spectrogram.png';
-        link.href = canvas.toDataURL('image/png');
+        link.download = `spectrogram.${format}`;
+        link.href = this.canvas.toDataURL(`image/${format}`);
         link.click();
     }
 
-    drawFrequencyScale(ctx) {
-        const scaleWidth = 40;
-        const minFreq = this.minFreq.value;
-        const maxFreq = this.maxFreq.value;
-        
-        ctx.fillStyle = '#aaa';
-        ctx.font = '10px Arial';
-        
-        for (let i = 0; i <= 5; i++) {
-            const freq = minFreq + (maxFreq - minFreq) * (i / 5);
-            const y = this.canvasLeft.height - (i / 5) * this.canvasLeft.height;
-            
-            ctx.fillText(
-                freq >= 1000 ? `${(freq/1000).toFixed(1)}kHz` : `${freq}Hz`,
-                this.canvasLeft.width - scaleWidth,
-                y + 15
-            );
-        }
+    showProgress() {
+        const progress = document.querySelector('.progress');
+        progress.classList.add('active');
+    }
+
+    hideProgress() {
+        const progress = document.querySelector('.progress');
+        progress.classList.remove('active');
+    }
+
+    updateProgress(percent) {
+        const progressFill = document.querySelector('.progress-fill');
+        progressFill.style.width = `${percent}%`;
     }
 }
 
-// Initialize the analyzer when the page loads
+// Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-    window.spectrogramAnalyzer = new SpectrogramAnalyzer();
+    window.spectrogramGenerator = new SpectrogramGenerator();
 });
