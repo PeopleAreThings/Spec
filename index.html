@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Spectrogram Analyzer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="controls">
+            <button id="recordButton">Record from Mic</button>
+            <input type="file" id="audioFileInput" accept="audio/*">
+            <button id="stopButton" disabled>Stop</button>
+            
+            <div class="settings">
+                <div class="setting">
+                    <label>Sensitivity</label>
+                    <input type="range" id="sensitivity" min="0" max="100" value="50">
+                    <span class="value">50.0%</span>
+                </div>
+                <div class="setting">
+                    <label>Contrast</label>
+                    <input type="range" id="contrast" min="0" max="100" value="50">
+                    <span class="value">50.0%</span>
+                </div>
+                <div class="setting">
+                    <label>Zoom</label>
+                    <input type="range" id="zoom" min="100" max="800" value="400">
+                    <span class="value">400%</span>
+                </div>
+                <div class="setting">
+                    <label>Min. frequency</label>
+                    <input type="range" id="minFreq" min="0" max="500" value="10">
+                    <span class="value">10.0 Hz</span>
+                </div>
+                <div class="setting">
+                    <label>Max. frequency</label>
+                    <input type="range" id="maxFreq" min="1000" max="20000" value="12000">
+                    <span class="value">12.0 kHz</span>
+                </div>
+            </div>
+
+            <div class="options">
+                <select id="colorScheme">
+                    <option value="heated">Heated Metal</option>
+                    <option value="viridis">Viridis</option>
+                    <option value="magma">Magma</option>
+                </select>
+                <button id="downloadButton">Download Image</button>
+                <button id="clearButton">Clear Spectrogram</button>
+            </div>
+        </div>
+
+        <div class="spectrogram-container">
+            <div class="channel-label">LEFT CHANNEL</div>
+            <canvas id="spectrogramLeft"></canvas>
+            <div class="channel-label">RIGHT CHANNEL</div>
+            <canvas id="spectrogramRight"></canvas>
+            
+            <div class="frequency-axis">
+                <div class="tick" style="bottom: 0%">0 Hz</div>
+                <div class="tick" style="bottom: 25%">3 kHz</div>
+                <div class="tick" style="bottom: 50%">6 kHz</div>
+                <div class="tick" style="bottom: 75%">9 kHz</div>
+                <div class="tick" style="bottom: 100%">12 kHz</div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
