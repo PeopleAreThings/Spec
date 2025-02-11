@@ -3,69 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Spectrogram Generator</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Live Spectrogram</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Audio Spectrogram Generator</h1>
-        
-        <div class="upload-area" id="dropZone">
-            <input type="file" id="audioFile" accept="audio/*">
-            <p>Drop your audio file here or click to select</p>
-        </div>
-        
-        <div class="controls">
-            <div class="control-group">
-                <label>FFT Size:</label>
-                <select id="fftSize">
-                    <option value="2048">2048 (Default)</option>
-                    <option value="4096">4096 (More detail)</option>
-                    <option value="1024">1024 (Less detail)</option>
-                </select>
-            </div>
-            
-            <div class="control-group">
-                <label>Color Scheme:</label>
-                <select id="colorScheme">
-                    <option value="heated">Heated Metal</option>
-                    <option value="viridis">Viridis</option>
-                    <option value="magma">Magma</option>
-                </select>
-            </div>
-            
-            <div class="control-group">
-                <label>Frequency Scale:</label>
-                <select id="freqScale">
-                    <option value="linear">Linear</option>
-                    <option value="log">Logarithmic</option>
-                    <option value="mel">Mel</option>
-                </select>
-            </div>
-            
-            <div class="control-group">
-                <label>Output Format:</label>
-                <select id="outputFormat">
-                    <option value="png">PNG</option>
-                    <option value="jpg">JPEG</option>
-                </select>
-            </div>
-        </div>
+    <h1>Live Spectrogram Generator</h1>
+    <button id="start-mic">Start Microphone</button>
+    <input type="file" id="upload-audio" accept="audio/*">
+    <canvas id="spectrogram"></canvas>
+    <button id="save-image">Save Image</button>
 
-        <div class="progress">
-            <div class="progress-label">Processing audio...</div>
-            <div class="progress-bar">
-                <div class="progress-fill"></div>
-            </div>
-        </div>
-
-        <div class="actions">
-            <button id="generateBtn" disabled>Generate Spectrogram</button>
-            <button id="downloadBtn" disabled>Download</button>
-        </div>
-
-        <canvas id="spectrogramCanvas"></canvas>
-    </div>
     <script src="script.js"></script>
 </body>
 </html>
