@@ -11,8 +11,6 @@ let audioContext;
 let analyser;
 let bufferLength;
 let dataArray;
-let canvasWidth = canvas.width;
-let canvasHeight = canvas.height;
 let spectrogramData = [];
 
 async function startMicrophone() {
@@ -64,14 +62,14 @@ function drawSpectrogram() {
         spectrogramData.push([...dataArray]);
 
         ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         for (let x = 0; x < spectrogramData.length; x++) {
             for (let y = 0; y < bufferLength; y++) {
                 const value = spectrogramData[x][y];
                 const color = getColor(value);
                 ctx.fillStyle = color;
-                ctx.fillRect(x, canvasHeight - (y * (canvasHeight / bufferLength)), 1, (canvasHeight / bufferLength));
+                ctx.fillRect(x, canvas.height - (y * (canvas.height / bufferLength)), 1, (canvas.height / bufferLength));
             }
         }
 
@@ -87,9 +85,47 @@ function getColor(value) {
 }
 
 function saveSpectrogramImage() {
+    const imgCanvas = document.createElement('canvas');
+    const imgCtx = imgCanvas.getContext('2d');
+
+    imgCanvas.width = canvas.width + 100;
+    imgCanvas.height = canvas.height + 50;
+    
+    // Draw spectrogram
+    imgCtx.fillStyle = "black";
+    imgCtx.fillRect(0, 0, imgCanvas.width, imgCanvas.height);
+    imgCtx.drawImage(canvas, 50, 0);
+
+    // Labels
+    imgCtx.fillStyle = "white";
+    imgCtx.font = "16px Arial";
+    imgCtx.fillText("Frequency (Hz)", 10, 20);
+    imgCtx.fillText("Time (s)", imgCanvas.width / 2, imgCanvas.height - 10);
+    
+    // Y-axis labels
+    for (let i = 0; i <= 5; i++) {
+        imgCtx.fillText(`${i}`, 10, imgCanvas.height - (i * (canvas.height / 5)) - 20);
+    }
+    
+    // X-axis labels
+    for (let i = 0; i <= 5; i++) {
+        imgCtx.fillText(`${i}`, (i * (canvas.width / 5)) + 50, imgCanvas.height - 30);
+    }
+    
+    // Color scale (right side)
+    const colorScale = ["#FFFF00", "#FF6600", "#9933FF", "#660099", "#330066", "#000"];
+    for (let i = 0; i < colorScale.length; i++) {
+        imgCtx.fillStyle = colorScale[i];
+        imgCtx.fillRect(imgCanvas.width - 40, i * 30 + 50, 20, 30);
+        imgCtx.fillStyle = "white";
+        imgCtx.fillText(`${-10 - (i * 20)}`, imgCanvas.width - 60, i * 30 + 70);
+    }
+    imgCtx.fillText("dBFS", imgCanvas.width - 60, 40);
+    
+    // Download
     const link = document.createElement('a');
     link.download = 'spectrogram.png';
-    link.href = canvas.toDataURL();
+    link.href = imgCanvas.toDataURL();
     link.click();
 }
 
